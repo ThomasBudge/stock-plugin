@@ -85,10 +85,14 @@ class Stock {
 		$this->loader->add_action('init', $this, 'add_cors_http_header');
 		$this->loader->add_action('init', $this, 'handle_preflight');
 		$this->loader->add_action('init', $this, 'register_post_types');
+		$this->loader->add_action('init', $this, 'custom_taxonomy_category');
+		$this->loader->add_action('init', $this, 'custom_taxonomy_year');
+		$this->loader->add_action('init', $this, 'custom_taxonomy_model_number');
+		$this->loader->add_action('init', $this, 'custom_taxonomy_family');
 		$this->loader->add_filter('rest_authentication_errors', $this, 'rest_filter_incoming_connections');
-		$this->loader->add_action( 'manage_stock_product_posts_custom_column', $this, 'bbloomer_add_new_order_admin_list_column_content' );
-		$this->loader->add_filter( 'manage_edit-stock_product_columns', $this, 'bbloomer_add_new_order_admin_list_column' );
-		$this->loader->add_action( 'admin_enqueue_scripts', $this, 'load_admin_style' );
+		$this->loader->add_action('manage_stock_product_posts_custom_column', $this, 'bbloomer_add_new_order_admin_list_column_content');
+		$this->loader->add_filter('manage_edit-stock_product_columns', $this, 'bbloomer_add_new_order_admin_list_column');
+		$this->loader->add_action('admin_enqueue_scripts', $this, 'load_admin_style');
 	}
 
 	function load_admin_style() {
@@ -131,7 +135,7 @@ class Stock {
 		register_post_type('stock_order', array(
 			'label' => 'Stock Order',
 			'show_ui' => true,
-			'public' => true,
+			'public' => true,'supports' => array( 'title' )
 		));
 
 		register_post_type('stock_product', array(
@@ -139,6 +143,151 @@ class Stock {
 			'show_ui' => true,
 			'public' => true,
 		));
+
+		register_post_type('models', array(
+			'label' => 'Models',
+			'show_ui' => true,
+			'public' => true,
+		));
+	}
+
+	function custom_taxonomy_category () {
+		$labels = array(
+			'name'                       => 'Product Category',
+			'singular_name'              => 'Product Category',
+			'menu_name'                  => 'Product Category',
+			'all_items'                  => 'Product Categories',
+			'parent_item'                => 'Parent Item',
+			'parent_item_colon'          => 'Parent Item:',
+			'new_item_name'              => 'New Product Category',
+			'add_new_item'               => 'Add New Product Category',
+			'edit_item'                  => 'Edit Product Category',
+			'update_item'                => 'Update Product Category',
+			'separate_items_with_commas' => 'Separate Product Categories with commas',
+			'search_items'               => 'Search Product Categories',
+			'add_or_remove_items'        => 'Add or remove Product Categories',
+			'choose_from_most_used'      => 'Choose from the most used Product Categories',
+		);
+
+		$args = array(
+			'labels'                     => $labels,
+			'hierarchical'               => true,
+			'public'                     => true,
+			'show_ui'                    => true,
+			'has_archive'                => true,
+			'show_admin_column'          => true,
+			'show_in_nav_menus'          => true,
+			'show_tagcloud'              => true,
+			'query_var'                  => true,
+			'publicly_queryable'         => true,
+		);
+
+
+		register_taxonomy( 'product_categories', array('stock_product'), $args );
+		register_taxonomy_for_object_type( 'product_categories', array('product_stock') );
+	}
+	
+	function custom_taxonomy_year()  {
+		$labels = array(
+			'name'                       => 'Year',
+			'singular_name'              => 'Year',
+			'menu_name'                  => 'Year',
+			'all_items'                  => 'Years',
+			'parent_item'                => 'Parent Item',
+			'parent_item_colon'          => 'Parent Item:',
+			'new_item_name'              => 'New Year',
+			'add_new_item'               => 'Add New Year',
+			'edit_item'                  => 'Edit Year',
+			'update_item'                => 'Update Year',
+			'separate_items_with_commas' => 'Separate Years with commas',
+			'search_items'               => 'Search Years',
+			'add_or_remove_items'        => 'Add or remove Years',
+			'choose_from_most_used'      => 'Choose from the most used Years',
+		);
+
+		$args = array(
+			'labels'                     => $labels,
+			'hierarchical'               => true,
+			'public'                     => true,
+			'show_ui'                    => true,
+			'has_archive'                => true,
+			'show_admin_column'          => true,
+			'show_in_nav_menus'          => true,
+			'show_tagcloud'              => true,
+			'query_var'                  => true,
+			'publicly_queryable'         => true,
+			'rewrite'                    => array( 'slug' => 'year' ),
+		);
+
+
+		register_taxonomy( 'years', array('models'), $args );
+		register_taxonomy_for_object_type( 'years', array('models') );
+	}
+
+	function custom_taxonomy_model_number()  {
+		$labels = array(
+			'name'                       => 'Model Number',
+			'singular_name'              => 'Model Number',
+			'menu_name'                  => 'Model Number',
+			'all_items'                  => 'Model Numbers',
+			'parent_item'                => 'Parent Item',
+			'parent_item_colon'          => 'Parent Item:',
+			'new_item_name'              => 'New Device Model Number',
+			'add_new_item'               => 'Add New Device Model Number',
+			'edit_item'                  => 'Edit Device Model Number',
+			'update_item'                => 'Update Device Model Number',
+			'separate_items_with_commas' => 'Separate Device Model Numbers with commas',
+			'search_items'               => 'Search Device Model Number',
+			'add_or_remove_items'        => 'Add or remove Device Families',
+			'choose_from_most_used'      => 'Choose from the most used Device Model Numbers',
+		);
+		$args = array(
+			'labels'                     => $labels,
+			'hierarchical'               => true,
+			'public'                     => true,
+			'show_ui'                    => true,
+			'has_archive'                    => true,
+			'show_admin_column'          => true,
+			'show_in_nav_menus'          => true,
+			'show_tagcloud'              => true,
+			'rewrite'                    => array( 'slug' => 'model' ),
+		);
+		register_taxonomy( 'model_number', array('models'), $args );
+		register_taxonomy_for_object_type( 'model_number', array('models') );
+	}
+
+	function custom_taxonomy_family()  {
+		$labels = array(
+			'name'                       => 'Family',
+			'singular_name'              => 'Family',
+			'menu_name'                  => 'Family',
+			'all_items'                  => 'Families',
+			// 'parent_item'                => 'Parent Item',
+			// 'parent_item_colon'          => 'Parent Item:',
+			// 'new_item_name'              => 'New Device Model Number',
+			// 'add_new_item'               => 'Add New Device Model Number',
+			// 'edit_item'                  => 'Edit Device Model Number',
+			// 'update_item'                => 'Update Device Model Number',
+			// 'separate_items_with_commas' => 'Separate Device Model Numbers with commas',
+			// 'search_items'               => 'Search Device Model Number',
+			// 'add_or_remove_items'        => 'Add or remove Device Families',
+			// 'choose_from_most_used'      => 'Choose from the most used Device Model Numbers',
+		);
+
+		$args = array(
+			'labels'                     => $labels,
+			'hierarchical'               => true,
+			'public'                     => true,
+			'show_ui'                    => true,
+			'has_archive'                    => true,
+			'show_admin_column'          => true,
+			'show_in_nav_menus'          => true,
+			'show_tagcloud'              => true,
+			'rewrite'                    => array( 'slug' => 'model' ),
+		);
+
+		register_taxonomy( 'family', array('models'), $args );
+		register_taxonomy_for_object_type( 'family', array('models') );
 	}
  
 	function bbloomer_add_new_order_admin_list_column( $columns ) {
@@ -185,12 +334,13 @@ class Stock {
 
 		$cost = 0;
 
-		$exchange = get_field('exchange_rate', $post->ID) ? get_field('exchange_rate', $post->ID) : 1;
-		$exchange = floatval($exchange);
-
 		if($stock_order_ids) {
 			if($is_bundle) {
 				foreach($stock_order_ids as $stock_order_id):
+
+					$exchange = get_field('exchange_rate', $stock_order_id) ? get_field('exchange_rate', $stock_order_id) : 1;
+					$exchange = floatval($exchange);
+
 					if(have_rows('products', $stock_order_id)):
 						while(have_rows('products', $stock_order_id)): the_row();	
 							$product_id = get_sub_field('product');
@@ -211,7 +361,9 @@ class Stock {
 				endforeach;
 			} else {
 				foreach($stock_order_ids as $stock_order_id):
-	
+					$exchange = get_field('exchange_rate', $stock_order_id) ? get_field('exchange_rate', $stock_order_id) : 1;
+					$exchange = floatval($exchange);
+
 					if(have_rows('products', $stock_order_id)) {
 						while(have_rows('products', $stock_order_id)): the_row();	
 							if (get_sub_field('product') === $post->ID) {
@@ -301,6 +453,7 @@ class Stock {
 			//first get all the order ids
 			// $query = new WC_Order_Query( $args );
 			$order_ids = get_all_orders_ids_by_product_id($product_id);
+			// print_r($order_ids);
 			// var_dump($order_ids);
 			//iterate through order
 			$filtered_order_ids = array();
@@ -314,7 +467,7 @@ class Stock {
 						//if one item has the product id, add it to the array and exit the loop
 						if ($item->get_product_id() === $product_id) {
 								$sold_quantity += $item->get_quantity();
-								$sold_value += $item->get_total() * $sold_quantity;
+								$sold_value += $item->get_total();
 								break;
 							}
 						}
@@ -322,7 +475,11 @@ class Stock {
 			}
 		}
 
-		$avg = $sold_value / $sold_quantity;
+		$avg = 0;
+
+		if ($sold_quantity) {
+			$avg = $sold_value / $sold_quantity;
+		}
 
 		if ( 'sold' === $column ) {
 			echo $sold_quantity;
@@ -330,7 +487,7 @@ class Stock {
 	
 		if ( 'sold_value_average' === $column ) {
 
-			if ($avg < $RRP) {
+			if ($avg && $avg < $RRP) {
 				echo '<span style="color:red;">' . '£' . $avg . '</span>';
 				return;
 			}
@@ -342,12 +499,16 @@ class Stock {
 			echo '£' . number_format($sold_value, 2);
 		}
 
-		if ('margin' === $column && $cost) {
+		if ('margin' === $column && $cost && $avg) {
 			$avg = $avg - ($avg * 0.10);
+			
+			$avg_revenue = $avg + $shipping_cost;
 
-			$avg = $avg - $shipping_cost;
+			$avg_gross_profit = $avg - $shipping_cost;
 
-			echo number_format((($avg - $cost ) / $cost) * 100, 2) . '%';
+			$margin = ($avg_gross_profit / $avg_revenue) * 100;
+
+			echo number_format($margin, 2) . '%';
 		}
 	}
 
@@ -431,6 +592,7 @@ class Stock {
 		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts' );
 		$this->loader->add_action( 'wp_dashboard_setup', $plugin_admin, 'add_dashboard_widget' );
 		$this->loader->add_action( 'admin_post_csv_processing', $plugin_admin, 'csv_processing' );
+		$this->loader->add_action( 'admin_post_everymac_processing', $plugin_admin, 'everymac_processing' );
 	}
 
 	/**
@@ -544,22 +706,22 @@ class Stock {
 }
 
 function get_all_orders_ids_by_product_id( $product_id ) {
-    global $wpdb;
+	global $wpdb;
     
     // Define HERE the orders status to include in  <==  <==  <==  <==  <==  <==  <==
     $orders_statuses = "'wc-completed', 'wc-processing', 'wc-on-hold'";
 
     # Get All defined statuses Orders IDs for a defined product ID (or variation ID)
-    return $wpdb->get_col( "
-        SELECT DISTINCT woi.order_id
-        FROM {$wpdb->prefix}woocommerce_order_itemmeta as woim, 
-             {$wpdb->prefix}woocommerce_order_items as woi, 
-             {$wpdb->prefix}posts as p
-        WHERE  woi.order_item_id = woim.order_item_id
-        AND woi.order_id = p.ID
-        AND p.post_status IN ( $orders_statuses )
-        AND woim.meta_key IN ( '_product_id', '_variation_id' )
-        AND woim.meta_value LIKE '$product_id'
-        ORDER BY woi.order_item_id DESC"
-    );
+	return $wpdb->get_col( "
+		SELECT DISTINCT woi.order_id
+		FROM {$wpdb->prefix}woocommerce_order_itemmeta as woim, 
+			{$wpdb->prefix}woocommerce_order_items as woi, 
+			{$wpdb->prefix}posts as p
+		WHERE  woi.order_item_id = woim.order_item_id
+		AND woi.order_id = p.ID
+		AND p.post_status IN ( $orders_statuses )
+		AND woim.meta_key IN ( '_product_id', '_variation_id' )
+		AND woim.meta_value LIKE '$product_id'
+		ORDER BY woi.order_item_id DESC"
+	);
 }

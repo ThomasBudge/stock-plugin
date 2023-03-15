@@ -39,8 +39,12 @@ class Stock_Import {
                 'quantity' => 26,
                 'price' => 27,
                 'order_date' => 49,
+                'transaction_id' => 61, // Header variation orders don't have this \
                 'variation' => 62, // Escape \
-                'shipping_total' => 28
+                'shipping_total' => 28,
+                'order_total' => 46,
+                'ebay_collected_tax' => 39,
+                'ebay_collected_tax_type' => 34,
             ),
             'wc' => array(
                 'order_number' => 0,
@@ -90,46 +94,46 @@ class Stock_Import {
             $product_exists = $this->product_exists($item_number);
             $product_type = $this->get_product_type($row);
 
-            if ($product_exists && $product_type === 'simple') continue;
+            $title = $this->get_column_data($row, 'title');
+
+            error_log($title . ' -- ' . $product_type . ' -- ' . $product_exists);
 
             if ($product_exists && $product_type === 'variation') {
                 $this->import_variation_product($row, $product_exists);
-            } 
+            } else if(!$product_exists && $product_type === 'simple') {
+                $title = $this->get_column_data($row, 'title');
 
-            if(!$product_exists) {
-                if($product_type === 'simple') {
-                    $title = $this->get_column_data($row, 'title');
+                $price = $this->get_column_data($row, 'price');
+                $key_group = $this->get_key_type($title);
 
-                    $price = $this->get_column_data($row, 'price');
-                    $key_group = $this->get_key_type($title);
+                $meta = array($this->item_id_meta_key => $item_number);
 
-                    $meta = array($this->item_id_meta_key => $item_number);
+                if ($key_group) $meta[$this->product_group_meta_key] = $key_group;
 
-                    if ($key_group) $meta[$this->product_group_meta_key] = $key_group;
-
-                    Stock_Product::insert_product($title, $price, $item_number, $meta);
-                } else if ($product_type === 'variation') {
-                    $this->import_variation_product($row);
-                }
+                Stock_Product::insert_product($title, $price, $item_number, $meta);
+            } else if (!$product_exists && $product_type === 'variation') {
+                $this->import_variation_product($row);
             }
 
             $order_num = $this->get_column_data($row, 'order_number');
-            if ($order_num) {
-                $orders[$order_num][] = $row;
-            }
+
+            if ($order_num) $orders[$order_num][] = $row;
 
             error_log('Product: ' . $current . '/' . $total . ' - Product No.: ' . $item_number);
             $current++;
         }
 
-        // $current = 0;
-        // $total = count($orders);
+        // Import all orders
+        $current = 0;
+        $total = count($orders);
 
-        // foreach($orders as $order_number => $items) {
-        //     $this->import_order($items, $order_number);
-        //     $current++;
-        //     error_log('Order: ' . $current . '/' . $total . ' - Order No.: ' . $order_number);
-        // }
+        foreach($orders as $order_number => $items) {
+            if ($this->order_exists($order_number)) continue;
+
+            $this->import_order($items, $order_number);
+            $current++;
+            error_log('Order: ' . $current . '/' . $total . ' - Order No.: ' . $order_number);
+        }
     }
 
     /**
@@ -142,7 +146,7 @@ class Stock_Import {
 
             if ($key === 'variation') {
                 $value = str_replace("\\", "Backslash", $value);
-                error_log( 'Variation: ' . $value);
+                // error_log( 'Variation: ' . $value);
             }
 
             return $value;
@@ -195,18 +199,10 @@ class Stock_Import {
                 }
             }
         }
-
-
-
-
-
-
         return false;
     }
 
     function import_order($order_items, $order_number) {
-        if ($this->order_exists($order_number)) return;
-
         $row = $order_items[0];
 
         $order = wc_create_order();
@@ -252,43 +248,74 @@ class Stock_Import {
         $order->set_address($shipping_address, 'shipping' );
 
         for($i = 0; $i < count($order_items); $i++) {
-            $item_id = $this->get_column_data($order_items[$i], 'item_number');
-            $item_variation = $this->get_column_data($order_items[$i], 'variation');
+            $item_row = $order_items[$i];
+            if ($this->channel === 'ebay' && !$this->get_column_data($item_row, 'transaction_id')) continue; // Ignore the first row as this is the order total for variation orders containing more thsan one item
+
+            $item_id = $this->get_column_data($item_row, 'item_number');
+            $item_variation = $this->get_column_data($item_row, 'variation');
             $product_id = $this->product_exists($item_id);
             $product = wc_get_product($product_id);
 
-            $quantity = $this->get_column_data($order_items[$i], 'quantity');
-            $price = $this->get_column_data($order_items[$i], 'price');
+            $quantity = (int) $this->get_column_data($item_row, 'quantity');
+            $price = $this->get_column_data($item_row, 'price');
             $price = str_replace('£', '', $price);
             $price = str_replace('US $', '', $price);
-            $price = str_replace('$', '', $price);
+            $price = (float) str_replace('$', '', $price);
+
+            $total = $price * $quantity;
 
             if($product) {
-                if ($this->get_product_type($row) === 'simple') {
-                    $order->add_product($product, $quantity, array('total' => floatval($price)));
+
+                if (($this->get_product_type($item_row) === 'simple' && $this->channel === 'wc') || ($this->get_product_type($item_row) === 'simple' && $this->channel === 'ebay' && $this->get_column_data($item_row, 'transaction_id'))) {
+                    $order->add_product($product, $quantity, array('total' => $total));
                 } else {
-                    $ebay_variation_data = $this->get_column_data($order_items[$i], 'variation');
+                    $ebay_variation_data = $this->get_column_data($item_row, 'variation');
 
                     $attribute_data = $this->get_variation_data($ebay_variation_data);
-                    
+
                     if($attribute_data) {
                         $variation_attributes = [];
-        
+
                         foreach($attribute_data as $key => $value) {
                             $variation_attributes[strtolower($key)] = trim($value[0]);
                         }
-        
+
                         $variation_id = $this->get_variation_id_from_attributes($product_id, $variation_attributes);
-        
+
                         if ($variation_id) {
                             $variation = new WC_Product_Variation($variation_id);
-                            $total = floatval($price) * (int) $quantity;
+
                             $order->add_product($variation, $quantity, array('total' => $total, 'variation' => $variation_attributes));
                         }
                     }
                 } 
             }
         }
+
+        if($this->channel === 'ebay' && $this->get_column_data($row, 'ebay_collected_tax') && $this->get_column_data($row, 'ebay_collected_tax_type')) {
+            $tax_amount = $this->get_column_data($row, 'ebay_collected_tax');
+            $tax_amount = str_replace('£', '', $tax_amount);
+            $tax_amount = str_replace('US $', '', $tax_amount);
+            $tax_amount = (float) str_replace('$', '', $tax_amount);
+            $tax_type = $this->get_column_data($row, 'ebay_collected_tax_type');
+            
+
+            // Get a new instance of the WC_Order_Item_Fee Object
+            $item_fee = new WC_Order_Item_Fee();
+
+            $item_fee->set_name( $tax_type ); // Generic fee name
+            $item_fee->set_amount( $tax_amount ); // Fee amount
+            $item_fee->set_tax_class( '' ); // default for ''
+            $item_fee->set_tax_status( 'none' ); // or 'none'
+            $item_fee->set_total( $tax_amount ); // Fee amount
+
+            // Calculating Fee taxes
+            $item_fee->calculate_taxes();
+
+            // Add Fee item to the order
+            $order->add_item( $item_fee );
+        }
+
 
         $shipping_total = $this->get_column_data($row, 'shipping_total');
         $shipping_total = str_replace('£', '', $shipping_total);     
@@ -305,9 +332,29 @@ class Stock_Import {
         $date = $this->get_column_data($row, 'order_date');
         $order->set_date_created($date);
 
-        $order->set_status('completed');
+        // if($this->channel === 'ebay') {
+        //     $order_total = $this->get_column_data($row, 'order_total');
+        //     $order_total = str_replace('£', '', $order_total);
+        //     $order_total = str_replace('US $', '', $order_total);
+        //     $order_total = (float) str_replace('$', '', $order_total);
+
+        //     error_log("ORDER TOTAL: " . $order_total);
+        //     error_log($order_total === 0);
+
+        //     if(!$order_total) {
+        //         error_log('ORDER TOTAL REFUNDED');
+        //         $order->set_status('refunded');
+        //     } else {
+        //         error_log('ORDER TOTAL COMPLETED');
+        //         $order->set_status('completed');
+        //     }
+        // } else {
+            $order->set_status('completed');
+        // }
 
         $order->update_meta_data($this->order_id_meta_key, $order_number);
+
+        $order->update_meta_data('items_data', $order_items);
 
         return $order->save();
     }
@@ -364,6 +411,7 @@ class Stock_Import {
 	}
 
     function import_variation_product ($row, $product_id = false) {
+        // error_log('import_variation_product');
         $ebay_variation_data = $this->get_column_data($row, 'variation');
 
         $attributes = $this->get_variation_data($ebay_variation_data);
@@ -419,7 +467,7 @@ class Stock_Import {
         $attributes = [];
 
         foreach($string_arr as $attribute) {
-            error_log(print_r($attribute, true));
+            // error_log(print_r($attribute, true));
             $explode = explode(':', $attribute);
 
             if (!isset($explode[1])) {
@@ -427,6 +475,7 @@ class Stock_Import {
             }
 
             $key = $explode[0];
+            $key = str_replace(' ', '', $key);
             $value = $explode[1];
             $attributes[$key] = array($value);
         }
@@ -467,11 +516,18 @@ class Stock_Import {
     }
 
     function create_variations ($parent_product_id, $attribute_data, $price) {
+        // error_log("parent_product_id: {$parent_product_id}");
         $variation_attributes = array();
+
+        // error_log('attribute_data');
+        // error_log(print_r($attribute_data, true));
 
         foreach($attribute_data as $key => $value) {
             $variation_attributes[strtolower($key)] = trim($value[0]);
         }
+
+        // error_log('variation_attributes');
+        // error_log(print_r($variation_attributes, true));
 
         // Running...
         $variable_product = wc_get_product($parent_product_id);
@@ -481,14 +537,26 @@ class Stock_Import {
             $existing_attribute_data = $variable_product->get_attributes();
             $existing_attribute_keys = array_keys($existing_attribute_data);
 
+            // error_log('existing_attribute_keys');
+            // error_log(print_r($existing_attribute_keys, true));
+
+            // error_log('existing_attribute_data');
+            // error_log(print_r($existing_attribute_data, true));
+
             $attribute_count = count($attribute_data);
             $attribute_exists_count = 0;
 
             foreach($attribute_data as $attr_key => $attr_values) {
                 $lowercasekey = str_replace('-', '', strtolower($attr_key));
+                $lowercasekey = str_replace(' ', '-', strtolower($attr_key));
 
+                // error_log('lowercasekey');
+                // error_log(print_r($lowercasekey, true));
+                
                 if (key_exists($lowercasekey, $existing_attribute_data)) {
                     $existing_options = array_values($existing_attribute_data[$lowercasekey]->get_options());
+                    // error_log('existing_options');
+                    // error_log(print_r($existing_options, true));
                     if (in_array($attr_values[0], $existing_options)) {
                         // if all values already exist then do not create variation
                         $attribute_exists_count++;
@@ -497,8 +565,14 @@ class Stock_Import {
 
                     $attr_values = array_unique(array_merge($existing_options, $attr_values));
                 }
-
+                // error_log('existing_options');
+                // error_log(print_r($attr_values, true));
                 $attribute = new WC_Product_Attribute();
+                
+                // error_log('existing_attribute_key');
+                // error_log(print_r($attr_key, true));
+                // error_log('existing_attribute_values');
+                // error_log(print_r($attr_values, true));
 
                 $attribute->set_id( 0 );
                 $attribute->set_name( $attr_key ); 
@@ -566,3 +640,31 @@ class Stock_Import {
         return false;
     }
 }
+
+// Add meta box
+add_action( 'add_meta_boxes', 'tcg_tracking_box' );
+function tcg_tracking_box() {
+    add_meta_box(
+        'tcg-tracking-modal',
+        'Order Items Meta',
+        'tcg_meta_box_callback',
+        'shop_order',
+        'normal',
+        'core'
+    );
+}
+
+// Callback
+function tcg_meta_box_callback( $post )
+{
+
+    $order = wc_get_order($post->ID);
+
+    echo $post->ID;
+    ?>
+    <pre>
+        <?php print_r($order->get_meta('items_data')); ?>
+    </pre>
+    <?php
+}
+
